@@ -1,0 +1,690 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Atlas de Mathlib</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Newsreader:ital,opsz,wght@1,6..72,400;1,6..72,500&display=swap">
+<style>
+/* Layout: plein écran — la sphère au centre, légende à gauche, fiche du théorème à droite.
+   Univers volontairement sombre (carte du ciel), un seul thème. */
+:root {
+  color-scheme: dark;
+  --bg: #0b0c10;
+  --panel: rgba(17, 19, 26, 0.86);
+  --panel-solid: #12141b;
+  --line: rgba(220, 225, 240, 0.12);
+  --ink: #eceae4;
+  --ink-2: #b9b8b0;
+  --ink-3: #85847d;
+  --accent: #f2d58a;          /* lumière des fondations / sélection */
+  --dep: #f2d58a;
+  --use: #7fd3ff;
+  --f-display: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --f-ui: "Familjen Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-code: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-ui); overflow: hidden; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+#stage { position: fixed; inset: 0; }
+#stage canvas { display: block; touch-action: none; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---- header ---- */
+#top { position: fixed; z-index: 5; top: calc(12px + env(safe-area-inset-top, 0px));
+  left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; gap: 16px; align-items: flex-start; pointer-events: none; }
+#brand { pointer-events: auto; min-width: 0; }
+#brand h1 { margin: 0; font-family: var(--f-display); font-style: italic; font-weight: 400; font-size: 30px; line-height: 1.05; letter-spacing: -0.01em; }
+#brand p { margin: 4px 0 0; color: var(--ink-2); font-size: 13px; font-variant-numeric: tabular-nums; }
+#search-wrap { pointer-events: auto; margin-left: auto; width: min(420px, 100%); position: relative; }
+#q { width: 100%; box-sizing: border-box; padding: 10px 14px; border-radius: 10px; background: var(--panel-solid);
+  border: 1px solid var(--line); font-family: var(--f-code); font-size: 13px; }
+#q::placeholder { color: var(--ink-3); font-family: var(--f-ui); }
+#sugg { position: absolute; top: calc(100% + 6px); left: 0; right: 0; max-height: 50vh; overflow-y: auto; padding: 4px; margin: 0; list-style: none; }
+#sugg li button { width: 100%; text-align: left; background: none; border: 0; padding: 7px 10px; border-radius: 6px; display: flex; gap: 8px; align-items: baseline; }
+#sugg li button:hover, #sugg li button.on { background: rgba(255,255,255,0.07); }
+#sugg .nm { font-family: var(--f-code); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+#sugg .dp { color: var(--ink-3); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---- left: legend & controls ---- */
+#left { position: fixed; z-index: 4; left: max(16px, env(safe-area-inset-left, 0px)); top: calc(96px + env(safe-area-inset-top, 0px));
+  width: 270px; max-height: calc(100% - 120px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); overflow-y: auto; padding: 14px; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 14px; }
+.eyebrow { font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 6px; }
+#legend { display: flex; flex-direction: column; gap: 1px; }
+#legend button { display: grid; grid-template-columns: 12px 1fr auto; gap: 9px; align-items: center; background: none; border: 0; padding: 5px 6px; border-radius: 6px; text-align: left; font-size: 13px; }
+#legend button:hover { background: rgba(255,255,255,0.06); }
+#legend button.off { opacity: 0.38; }
+#legend button.off .sw { background: transparent !important; }
+#legend .sw { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(255,255,255,0.25) inset; }
+#legend .ct { color: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; background: rgba(255,255,255,0.05); border-radius: 8px; padding: 3px; gap: 3px; }
+.seg button { border: 0; background: none; padding: 6px; border-radius: 6px; font-size: 13px; color: var(--ink-2); }
+.seg button[aria-pressed="true"] { background: rgba(255,255,255,0.12); color: var(--ink); }
+.row { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: var(--ink-2); }
+.row b { font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.check { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--ink-2); }
+.note { font-size: 12px; line-height: 1.45; color: var(--ink-3); margin: 0; }
+.note a { color: var(--ink-2); }
+#picks { display: flex; flex-wrap: wrap; gap: 6px; }
+#picks button { background: rgba(255,255,255,0.05); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: 12px; color: var(--ink-2); }
+#picks button:hover { color: var(--ink); border-color: rgba(255,255,255,0.3); }
+
+/* ---- right: theorem card ---- */
+#card { position: fixed; z-index: 4; right: max(16px, env(safe-area-inset-right, 0px)); top: calc(96px + env(safe-area-inset-top, 0px));
+  width: 360px; max-height: calc(100% - 120px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); overflow-y: auto; padding: 16px; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 12px; }
+#c-kind { padding-right: 28px; display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--ink-2); flex-wrap: wrap; }
+.chip { display: inline-flex; gap: 6px; align-items: center; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,0.06); }
+.chip i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+#c-name { margin: 0; font-family: var(--f-code); font-weight: 600; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere; }
+#c-file { font-family: var(--f-code); font-size: 11.5px; color: var(--ink-3); overflow-wrap: anywhere; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stats div { background: rgba(255,255,255,0.04); border-radius: 8px; padding: 8px 10px; }
+.stats b { display: block; font-size: 20px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.stats span { font-size: 11.5px; color: var(--ink-3); }
+#c-link { display: flex; justify-content: center; gap: 8px; padding: 9px; border-radius: 8px; background: var(--accent); color: #1b1608; text-decoration: none; font-weight: 600; font-size: 13.5px; }
+#c-link:hover { filter: brightness(1.08); }
+.list h3 { display: flex; justify-content: space-between; margin: 0 0 4px; font-size: 12px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.list h3 .k { display: inline-flex; align-items: center; gap: 6px; }
+.list h3 .k::before { content: ""; width: 14px; height: 2px; background: currentColor; }
+.list ul { list-style: none; margin: 0; padding: 0; }
+.list li button { width: 100%; display: grid; grid-template-columns: 8px 1fr auto; gap: 8px; align-items: center; background: none; border: 0; padding: 4px 4px; border-radius: 5px; text-align: left; }
+.list li button:hover { background: rgba(255,255,255,0.06); }
+.list .nm { font-family: var(--f-code); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.list .dp { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.list i { width: 7px; height: 7px; border-radius: 50%; }
+.more { font-size: 12px; color: var(--ink-3); padding: 4px; }
+#close { position: absolute; right: 10px; top: 10px; background: none; border: 0; color: var(--ink-3); font-size: 18px; line-height: 1; padding: 4px 8px; border-radius: 6px; }
+#close:hover { color: var(--ink); background: rgba(255,255,255,0.06); }
+
+#tip { position: fixed; z-index: 6; pointer-events: none; padding: 5px 9px; border-radius: 6px; background: var(--panel-solid); border: 1px solid var(--line);
+  font-family: var(--f-code); font-size: 12px; white-space: nowrap; transform: translate(12px, 12px); }
+#tip small { font-family: var(--f-ui); color: var(--ink-3); margin-left: 6px; }
+
+#loading { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: var(--bg); text-align: center; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); }
+#loading h2 { font-family: var(--f-display); font-style: italic; font-weight: 400; font-size: 28px; margin: 0 0 8px; }
+#loading p { color: var(--ink-2); margin: 0; font-variant-numeric: tabular-nums; }
+#axis-note { position: fixed; z-index: 3; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); font-size: 12px; color: var(--ink-3); pointer-events: none; text-align: center; max-width: calc(100% - 32px); }
+#menu-btn { display: none; }
+#refresh { position: fixed; z-index: 5; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  width: 300px; padding: 10px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
+#refresh button { background: rgba(255,255,255,0.06); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 13px; color: var(--ink); }
+#refresh button:hover:not(:disabled) { border-color: rgba(255,255,255,0.3); }
+#refresh button:disabled { opacity: 0.5; cursor: default; }
+#refresh .when { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+#refresh .step { color: var(--ink); }
+#refresh pre { margin: 0; max-height: 120px; overflow: auto; font-family: var(--f-code); font-size: 11px; color: var(--ink-3); white-space: pre-wrap; overflow-wrap: anywhere; }
+#refresh.err .step { color: #ff8f8f; }
+#card:not([hidden]) ~ #refresh { display: none; }
+
+@media (max-width: 820px) {
+  #brand h1 { font-size: 22px; }
+  #top { flex-direction: column; gap: 10px; }
+  #search-wrap { margin-left: 0; width: 100%; }
+  #left { top: auto; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); width: auto; right: max(16px, env(safe-area-inset-right, 0px)); max-height: 46%; }
+  #left.collapsed > :not(#menu-btn) { display: none; }
+  #menu-btn { display: flex; justify-content: space-between; background: none; border: 0; padding: 0; font-size: 13px; color: var(--ink-2); }
+  #card { top: auto; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); width: auto; max-height: 55%; }
+  #axis-note { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div id="stage" aria-label="Graphe 3D des déclarations de Mathlib"></div>
+
+<header id="top">
+  <div id="brand">
+    <h1>Atlas de Mathlib</h1>
+    <p id="sub">Chargement…</p>
+  </div>
+  <div id="search-wrap">
+    <label for="q" class="eyebrow" style="position:absolute;left:-9999px">Chercher un théorème</label>
+    <input id="q" type="search" placeholder="Chercher un théorème (ex. mul_comm, Real.pi, Nat.Prime)" autocomplete="off" spellcheck="false">
+    <ul id="sugg" class="panel" hidden></ul>
+  </div>
+</header>
+
+<aside id="left" class="panel">
+  <button id="menu-btn" aria-expanded="true"><span>Légende et réglages</span><span id="menu-ic">▾</span></button>
+  <section>
+    <p class="eyebrow">Domaines · clic pour masquer</p>
+    <div id="legend"></div>
+  </section>
+  <section>
+    <p class="eyebrow">Disposition</p>
+    <div class="seg" role="group" aria-label="Disposition">
+      <button id="m-sphere" aria-pressed="true">Sphère</button>
+      <button id="m-layers" aria-pressed="false">Étages</button>
+    </div>
+  </section>
+  <section>
+    <div class="row"><span>Profondeur max affichée</span><b id="dval"></b></div>
+    <input id="depth" type="range" min="0" max="298" value="298" aria-label="Profondeur maximale">
+    <p class="note">Profondeur = longueur de la plus longue chaîne de dépendances jusqu'aux fondations, calculée sur le graphe exact (les constantes auxiliaires générées par Lean ne comptent pas comme un étage).</p>
+  </section>
+  <section style="display:flex;flex-direction:column;gap:6px">
+    <label class="check"><input id="only-thm" type="checkbox"> Seulement les théorèmes</label>
+    <label class="check"><input id="rotate" type="checkbox" checked> Rotation lente</label>
+  </section>
+  <section>
+    <p class="eyebrow">Théorèmes célèbres</p>
+    <div id="picks"></div>
+  </section>
+  <p class="note" id="src-note">Lean 4 (Init), Batteries et Mathlib au 20 octobre 2026. Les profondeurs viennent du graphe exact des termes compilés (801&nbsp;970 constantes, y compris les instances et les lemmes utilisés par <code>simp</code> et les tactiques). Les listes «&nbsp;Utilise&nbsp;» et «&nbsp;Utilisé par&nbsp;» montrent les noms cités dans les sources et confirmés par ce graphe.</p>
+</aside>
+
+<aside id="card" class="panel" hidden>
+  <button id="close" aria-label="Fermer la fiche">×</button>
+  <div id="c-kind"></div>
+  <h2 id="c-name"></h2>
+  <div id="c-file"></div>
+  <div class="stats">
+    <div><b id="c-depth"></b><span>profondeur</span></div>
+    <div><b id="c-cone"></b><span>fondations</span></div>
+    <div><b id="c-users"></b><span>l'utilisent</span></div>
+  </div>
+  <a id="c-link" target="_blank" rel="noopener">Voir la preuve sur GitHub ↗</a>
+  <div class="list"><h3><span class="k" style="color:var(--dep)">Utilise</span><span id="c-nd"></span></h3><ul id="c-deps"></ul></div>
+  <div class="list"><h3><span class="k" style="color:var(--use)">Utilisé par</span><span id="c-nu"></span></h3><ul id="c-uses"></ul></div>
+</aside>
+
+<div id="tip" hidden></div>
+<div id="axis-note">Centre&nbsp;: les 3 axiomes de Lean · vers l'extérieur&nbsp;: des preuves qui reposent sur de plus en plus d'étages</div>
+<div id="loading"><div><h2>Atlas de Mathlib</h2><p id="load-msg">Chargement de l'atlas…</p></div></div>
+<aside id="refresh" class="panel" hidden>
+  <div class="when" id="r-when"></div>
+  <button id="r-btn">Rafraîchir depuis Mathlib</button>
+  <div class="step" id="r-step" hidden></div>
+  <pre id="r-log" hidden></pre>
+</aside>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(async function () {
+const $ = (id) => document.getElementById(id);
+const loadMsg = (t) => { $('load-msg').textContent = t; };
+
+async function getBin(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(path + ' : ' + r.status);
+  const b64 = (await r.text()).trim();
+  let buf = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  if (buf[0] === 0x1f && buf[1] === 0x8b) {
+    const ds = new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip')));
+    buf = new Uint8Array(await ds.arrayBuffer());
+  }
+  return buf;
+}
+
+let meta, nodesB, namesB, degB, edgesB, depthB, usersB;
+try {
+  [meta, nodesB, namesB, degB, edgesB, depthB, usersB] = await Promise.all([
+    fetch('data/meta.json').then(r => r.json()),
+    getBin('data/nodes.b64.txt'), getBin('data/names.b64.txt'), getBin('data/deg.b64.txt'), getBin('data/edges.b64.txt'), getBin('data/depth.b64.txt'),
+    getBin('data/users.b64.txt').catch(() => null)]);
+} catch (e) {
+  loadMsg('Impossible de charger les données (' + e.message + '). Rechargez la page.');
+  return;
+}
+loadMsg('Construction de la sphère…');
+await new Promise(r => setTimeout(r, 20));
+
+const N = meta.n;
+const DOM = meta.domains;
+const names = new TextDecoder().decode(namesB).split('\n');
+const nodeView = new DataView(nodesB.buffer, nodesB.byteOffset, nodesB.byteLength);
+const REC = 14;
+const dirX = new Float32Array(N), dirY = new Float32Array(N), dirZ = new Float32Array(N);
+const depth = new Uint16Array(depthB.buffer.slice(depthB.byteOffset, depthB.byteOffset + 2 * N)), dom = new Uint8Array(N), kind = new Uint8Array(N), twin = new Uint8Array(N);
+const fileI = new Uint16Array(N), lineI = new Uint16Array(N);
+for (let i = 0; i < N; i++) {
+  const o = i * REC;
+  dirX[i] = nodeView.getInt16(o, true) / 32767; dirY[i] = nodeView.getInt16(o + 2, true) / 32767; dirZ[i] = nodeView.getInt16(o + 4, true) / 32767;
+  dom[i] = nodesB[o + 7]; kind[i] = nodesB[o + 8]; twin[i] = nodesB[o + 9];
+  fileI[i] = nodeView.getUint16(o + 10, true); lineI[i] = nodeView.getUint16(o + 12, true);
+}
+// CSR: dependencies (uses) and reverse (used by)
+const deg = new Uint16Array(degB.buffer, degB.byteOffset, N);
+const dst = new Uint32Array(edgesB.buffer, edgesB.byteOffset, edgesB.byteLength / 4);
+const off = new Uint32Array(N + 1);
+for (let i = 0; i < N; i++) off[i + 1] = off[i] + deg[i];
+const rdeg = new Uint32Array(N);
+for (let k = 0; k < dst.length; k++) rdeg[dst[k]]++;
+const roff = new Uint32Array(N + 1);
+for (let i = 0; i < N; i++) roff[i + 1] = roff[i] + rdeg[i];
+const rsrc = new Uint32Array(dst.length);
+const fill = roff.slice(0, N);
+for (let i = 0; i < N; i++) for (let k = off[i]; k < off[i + 1]; k++) rsrc[fill[dst[k]]++] = i;
+
+const nameIdx = new Map();
+for (let i = 0; i < N; i++) if (!nameIdx.has(names[i])) nameIdx.set(names[i], i);
+const AX = new Set(meta.axioms);
+const THM = new Set([meta.kinds.indexOf('theorem'), meta.kinds.indexOf('lemma')]);
+const usersN = usersB ? new Uint32Array(usersB.buffer.slice(usersB.byteOffset, usersB.byteOffset + 4 * N)) : null;
+const nUsersOf = (i) => usersN ? usersN[i] : roff[i + 1] - roff[i];
+const KIND_FR = { theorem: 'théorème', lemma: 'lemme', def: 'définition', abbrev: 'abréviation', instance: 'instance', structure: 'structure', class: 'classe', inductive: 'type inductif', axiom: 'axiome', opaque: 'constante opaque', irreducible_def: 'définition', alias: 'alias', field: 'champ de structure' };
+
+// ---- positions for both layouts ----
+const posS = new Float32Array(N * 3), posL = new Float32Array(N * 3);
+let rnd = 12345; const rand = () => ((rnd = (rnd * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+const DS = 158 / meta.maxDepth;   // garde la taille de la sphère quelle que soit la profondeur max
+const radius = (d) => 14 + 17 * Math.pow(d * DS, 0.72);
+for (let i = 0; i < N; i++) {
+  const dj = Math.max(0, depth[i] + (rand() - 0.5) * 0.9);
+  let r = radius(dj);
+  let x = dirX[i], y = dirY[i], z = dirZ[i];
+  if (AX.has(i)) { r = 3; }
+  posS[i * 3] = x * r; posS[i * 3 + 1] = z * r; posS[i * 3 + 2] = y * r;
+  // layered: Lambert azimuthal disc from the "north" (fondations) side, height = depth
+  const rho = Math.sqrt(Math.max(0, (1 - z) / 2)) * 300;
+  const ang = Math.atan2(y, x);
+  posL[i * 3] = Math.cos(ang) * rho; posL[i * 3 + 2] = Math.sin(ang) * rho;
+  posL[i * 3 + 1] = (AX.has(i) ? -6 : dj * 3.2 * DS) - 170;
+}
+
+// ---- three.js scene ----
+const stage = $('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x0b0c10, 1);
+stage.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, 1, 1, 6000);
+camera.position.set(330, 190, 470);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08; controls.rotateSpeed = 0.6;
+controls.autoRotate = true; controls.autoRotateSpeed = 0.35;
+controls.minDistance = 20; controls.maxDistance = 2600;
+
+const geo = new THREE.BufferGeometry();
+geo.setAttribute('position', new THREE.BufferAttribute(posS, 3));
+geo.setAttribute('posL', new THREE.BufferAttribute(posL, 3));
+const colArr = new Float32Array(N * 3);
+const domCol = DOM.map(d => new THREE.Color(d.color));
+for (let i = 0; i < N; i++) { const c = domCol[dom[i]]; colArr[i * 3] = c.r; colArr[i * 3 + 1] = c.g; colArr[i * 3 + 2] = c.b; }
+geo.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
+const info = new Float32Array(N * 3);   // depth, domain, state
+const stateAttr = new Uint8Array(N);    // 0 normal, 1 dim, 2 cone, 3 selected, 4 user, 5 axiom
+for (let i = 0; i < N; i++) { info[i * 3] = depth[i]; info[i * 3 + 1] = dom[i]; info[i * 3 + 2] = AX.has(i) ? 5 : 0; }
+const infoAttr = new THREE.BufferAttribute(info, 3);
+geo.setAttribute('info', infoAttr);
+const thmAttr = new Float32Array(N); for (let i = 0; i < N; i++) thmAttr[i] = THM.has(kind[i]) ? 1 : 0;
+geo.setAttribute('thm', new THREE.BufferAttribute(thmAttr, 1));
+geo.computeBoundingSphere();
+
+const uniforms = {
+  uMix: { value: 0 }, uMaxDepth: { value: 65535 }, uHidden: { value: new Array(9).fill(0) },
+  uOnlyThm: { value: 0 }, uSel: { value: 0 }, uPx: { value: renderer.getPixelRatio() },
+  uDep: { value: new THREE.Color('#f2d58a') }, uUse: { value: new THREE.Color('#7fd3ff') },
+};
+const mat = new THREE.ShaderMaterial({
+  uniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: `
+    attribute vec3 posL; attribute vec3 info; attribute float thm; attribute vec3 color;
+    uniform float uMix, uMaxDepth, uOnlyThm, uSel, uPx; uniform float uHidden[9];
+    uniform vec3 uDep, uUse;
+    varying vec3 vCol; varying float vA;
+    void main() {
+      vec3 p = mix(position, posL, uMix);
+      vec4 mv = modelViewMatrix * vec4(p, 1.0);
+      gl_Position = projectionMatrix * mv;
+      int d = int(info.y + 0.5);
+      float hidden = 0.0;
+      for (int k = 0; k < 9; k++) { if (k == d && uHidden[k] > 0.5) hidden = 1.0; }
+      if (info.x > uMaxDepth) hidden = 1.0;
+      if (uOnlyThm > 0.5 && thm < 0.5 && info.z < 4.5) hidden = 1.0;
+      float st = info.z;
+      float size = 2.2; vCol = color; vA = 0.55;
+      if (uSel > 0.5) { vA = 0.12; size = 1.6; }
+      if (st > 1.5 && st < 2.5) { vCol = mix(color, uDep, 0.55); vA = 0.95; size = 2.4; }
+      if (st > 3.5 && st < 4.5) { vCol = mix(color, uUse, 0.55); vA = 0.9; size = 2.4; }
+      if (st > 2.5 && st < 3.5) { vCol = vec3(1.0); vA = 1.0; size = 9.0; }
+      if (st > 4.5) { vCol = vec3(1.0, 0.93, 0.75); vA = 1.0; size = 7.0; hidden = 0.0; }
+      if (hidden > 0.5) { vA = 0.0; size = 0.0; }
+      gl_PointSize = size * uPx * clamp(420.0 / -mv.z, 0.6, 3.2);
+    }`,
+  fragmentShader: `
+    varying vec3 vCol; varying float vA;
+    void main() {
+      vec2 c = gl_PointCoord - 0.5; float r = dot(c, c);
+      if (r > 0.25) discard;
+      gl_FragColor = vec4(vCol * vA, 1.0) * (1.0 - r * 3.2);
+    }`,
+});
+const points = new THREE.Points(geo, mat);
+scene.add(points);
+
+// lines for direct links of the selection
+const lineGeo = new THREE.BufferGeometry();
+const lineMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
+const lines = new THREE.LineSegments(lineGeo, lineMat); scene.add(lines);
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize); resize();
+
+// ---- UI: header numbers, legend ----
+const nThm = thmAttr.reduce((a, b) => a + b, 0);
+const fmt = (n) => n.toLocaleString('fr-CH');
+$('sub').textContent = `${fmt(N)} déclarations dont ${fmt(nThm)} théorèmes · ${fmt(dst.length)} dépendances · profondeur max ${meta.maxDepth}`;
+$('depth').max = meta.maxDepth; $('depth').value = meta.maxDepth; $('dval').textContent = meta.maxDepth;
+
+const legend = $('legend');
+DOM.forEach((d, k) => {
+  const b = document.createElement('button');
+  b.innerHTML = `<span class="sw" style="background:${d.color}"></span><span>${d.label}</span><span class="ct">${fmt(meta.domCounts[k])}</span>`;
+  b.title = d.folders.join(', ');
+  b.setAttribute('aria-pressed', 'true');
+  b.onclick = () => {
+    const h = uniforms.uHidden.value; h[k] = h[k] ? 0 : 1;
+    b.classList.toggle('off', !!h[k]); b.setAttribute('aria-pressed', h[k] ? 'false' : 'true');
+  };
+  legend.appendChild(b);
+});
+
+let mixTarget = 0;
+function setMode(m) {
+  mixTarget = m; $('m-sphere').setAttribute('aria-pressed', m === 0); $('m-layers').setAttribute('aria-pressed', m === 1);
+  $('axis-note').textContent = m === 0
+    ? "Centre : les 3 axiomes de Lean · vers l'extérieur : des preuves qui reposent sur de plus en plus d'étages"
+    : 'En bas : les axiomes · chaque étage = un niveau de profondeur de plus';
+  if (m === 1) { camera.position.set(0, 120, 900); controls.target.set(0, -40, 0); }
+  else { controls.target.set(0, 0, 0); }
+}
+$('m-sphere').onclick = () => setMode(0);
+$('m-layers').onclick = () => setMode(1);
+$('depth').oninput = (e) => { uniforms.uMaxDepth.value = +e.target.value; $('dval').textContent = e.target.value; };
+$('only-thm').onchange = (e) => { uniforms.uOnlyThm.value = e.target.checked ? 1 : 0; };
+$('rotate').onchange = (e) => { controls.autoRotate = e.target.checked; };
+$('menu-btn').onclick = () => {
+  const l = $('left'); const c = l.classList.toggle('collapsed');
+  $('menu-btn').setAttribute('aria-expanded', !c); $('menu-ic').textContent = c ? '▸' : '▾';
+};
+if (window.innerWidth <= 820) $('menu-btn').click();
+
+const PICKS = [
+  ["Théorème fondamental de l'algèbre", 'Complex.isAlgClosed'],
+  ['Infinité des nombres premiers', 'Nat.exists_infinite_primes'],
+  ['√2 est irrationnel', 'irrational_sqrt_two'],
+  ['Petit théorème de Fermat', 'ZMod.pow_card_sub_one_eq_one'],
+  ['Pythagore', 'EuclideanGeometry.dist_sq_eq_dist_sq_add_dist_sq_iff_angle_eq_pi_div_two'],
+  ['Réciprocité quadratique', 'jacobiSym.quadratic_reciprocity'],
+  ['ζ(2) = π²/6', 'hasSum_zeta_two'],
+  ['Série harmonique divergente', 'Real.tendsto_sum_range_one_div_nat_succ_atTop'],
+  ['mul_comm', 'mul_comm'],
+];
+PICKS.forEach(([label, nm]) => {
+  if (!nameIdx.has(nm)) return;
+  const b = document.createElement('button'); b.textContent = label; b.title = nm;
+  b.onclick = () => select(nameIdx.get(nm), true); $('picks').appendChild(b);
+});
+
+// ---- selection ----
+let sel = -1;
+const domColor = (i) => DOM[dom[i]].color;
+function clearState() { for (let i = 0; i < N; i++) info[i * 3 + 2] = AX.has(i) ? 5 : 0; }
+function cone(i) {   // all transitive dependencies
+  const seen = new Uint8Array(N); const stack = [i]; seen[i] = 1; let n = 0;
+  while (stack.length) {
+    const v = stack.pop();
+    for (let k = off[v]; k < off[v + 1]; k++) { const w = dst[k]; if (!seen[w]) { seen[w] = 1; n++; stack.push(w); } }
+  }
+  return [seen, n];
+}
+function li(j, ul) {
+  const l = document.createElement('li'); const b = document.createElement('button');
+  b.innerHTML = `<i style="background:${domColor(j)}"></i><span class="nm"></span><span class="dp">p.${depth[j]}</span>`;
+  b.querySelector('.nm').textContent = names[j]; b.title = names[j];
+  b.onclick = () => select(j, true); l.appendChild(b); ul.appendChild(l);
+}
+function curPos(i, out) {
+  const m = uniforms.uMix.value;
+  out.set(posS[i*3] * (1-m) + posL[i*3] * m, posS[i*3+1] * (1-m) + posL[i*3+1] * m, posS[i*3+2] * (1-m) + posL[i*3+2] * m);
+  return out;
+}
+let flyTo = null;
+function select(i, fly) {
+  sel = i; clearState();
+  if (i < 0) {
+    uniforms.uSel.value = 0; infoAttr.needsUpdate = true; $('card').hidden = true;
+    lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3)); return;
+  }
+  const [seen, nCone] = cone(i);
+  for (let v = 0; v < N; v++) if (seen[v]) info[v * 3 + 2] = 2;
+  const users = [];
+  for (let k = roff[i]; k < roff[i + 1]; k++) { users.push(rsrc[k]); info[rsrc[k] * 3 + 2] = 4; }
+  for (const a of AX) info[a * 3 + 2] = 5;
+  info[i * 3 + 2] = 3;
+  uniforms.uSel.value = 1; infoAttr.needsUpdate = true;
+
+  // lines: direct deps (gold) and up to 1500 direct users (blue)
+  const deps = []; for (let k = off[i]; k < off[i + 1]; k++) deps.push(dst[k]);
+  buildLines(i, deps, users.slice(0, 1500));
+
+  // card
+  const f = meta.files[fileI[i]];
+  const repo = ['lean4', 'batteries', 'mathlib'][f[1]];
+  const kn = meta.kinds[kind[i]];
+  $('c-kind').innerHTML = `<span class="chip"><i style="background:${domColor(i)}"></i>${DOM[dom[i]].label}</span><span class="chip">${KIND_FR[kn] || kn}${twin[i] ? ' · version additive auto' : ''}</span>`;
+  $('c-name').textContent = names[i];
+  $('c-file').textContent = f[0] + ' : ligne ' + lineI[i];
+  $('c-link').href = meta.bases[repo] + f[0] + '#L' + lineI[i];
+  $('c-depth').textContent = depth[i];
+  $('c-cone').textContent = fmt(nCone);
+  const nUsers = nUsersOf(i);
+  $('c-users').textContent = fmt(nUsers);
+  const dl = $('c-deps'), ul = $('c-uses'); dl.innerHTML = ''; ul.innerHTML = '';
+  deps.sort((a, b) => depth[b] - depth[a]);
+  deps.slice(0, 40).forEach(j => li(j, dl));
+  if (!deps.length) dl.innerHTML = '<li class="more">Aucune : c\'est une fondation.</li>';
+  else if (deps.length > 40) dl.insertAdjacentHTML('beforeend', `<li class="more">+ ${fmt(deps.length - 40)} autres</li>`);
+  users.sort((a, b) => depth[b] - depth[a]);
+  users.slice(0, 40).forEach(j => li(j, ul));
+  if (!nUsers) ul.innerHTML = '<li class="more">Personne pour l\'instant : c\'est un sommet.</li>';
+  else if (!users.length) ul.innerHTML = `<li class="more">Notion omniprésente : utilisée par ${fmt(nUsers)} déclarations, trop pour les lister.</li>`;
+  else if (nUsers > 40) ul.insertAdjacentHTML('beforeend', `<li class="more">+ ${fmt(nUsers - Math.min(40, users.length))} autres</li>`);
+  $('c-nd').textContent = fmt(deps.length); $('c-nu').textContent = fmt(nUsers);
+  $('card').hidden = false;
+  if (fly) {
+    const p = curPos(i, new THREE.Vector3());
+    const dir = p.clone().sub(controls.target); const len = Math.max(dir.length(), 1);
+    const camDist = camera.position.distanceTo(controls.target);
+    flyTo = { target: p.clone().multiplyScalar(0.35), cam: p.clone().add(dir.normalize().multiplyScalar(Math.max(260, Math.min(camDist, 700)))), t: 0 };
+  }
+}
+function buildLines(i, deps, users) {
+  const n = deps.length + users.length;
+  const pos = new Float32Array(n * 6), col = new Float32Array(n * 6);
+  const P = new THREE.Vector3(), Q = new THREE.Vector3();
+  curPos(i, P);
+  const cd = uniforms.uDep.value, cu = uniforms.uUse.value;
+  [...deps.map(j => [j, cd]), ...users.map(j => [j, cu])].forEach(([j, c], k) => {
+    curPos(j, Q);
+    pos.set([P.x, P.y, P.z, Q.x, Q.y, Q.z], k * 6);
+    col.set([c.r, c.g, c.b, c.r * 0.35, c.g * 0.35, c.b * 0.35], k * 6);
+  });
+  lineGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  lineGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  lineGeo.computeBoundingSphere();
+}
+$('close').onclick = () => select(-1);
+
+// ---- picking (screen-space nearest visible point) ----
+const v3 = new THREE.Vector3();
+function visible(i) {
+  if (info[i * 3 + 2] >= 5) return true;
+  if (uniforms.uHidden.value[dom[i]]) return false;
+  if (depth[i] > uniforms.uMaxDepth.value) return false;
+  if (uniforms.uOnlyThm.value && !thmAttr[i]) return false;
+  if (sel >= 0 && info[i * 3 + 2] === 0) return false;
+  return true;
+}
+function pick(cx, cy, maxPx) {
+  const w = window.innerWidth, h = window.innerHeight;
+  const m = camera.projectionMatrix.clone().multiply(camera.matrixWorldInverse).elements;
+  const mx = uniforms.uMix.value, a = 1 - mx;
+  let best = -1, bd = maxPx * maxPx, bz = Infinity;
+  for (let i = 0; i < N; i++) {
+    const x = posS[i*3]*a + posL[i*3]*mx, y = posS[i*3+1]*a + posL[i*3+1]*mx, z = posS[i*3+2]*a + posL[i*3+2]*mx;
+    const W = m[3]*x + m[7]*y + m[11]*z + m[15];
+    if (W <= 0) continue;
+    const sx = ((m[0]*x + m[4]*y + m[8]*z + m[12]) / W * 0.5 + 0.5) * w;
+    const dx = sx - cx; if (dx > maxPx || dx < -maxPx) continue;
+    const sy = (1 - ((m[1]*x + m[5]*y + m[9]*z + m[13]) / W * 0.5 + 0.5)) * h;
+    const dy = sy - cy; const d2 = dx*dx + dy*dy;
+    if (d2 < bd || (d2 < maxPx * maxPx * 0.3 && W < bz)) {
+      if (!visible(i)) continue;
+      bd = d2; best = i; bz = W;
+    }
+  }
+  return best;
+}
+const tip = $('tip');
+let downAt = null, hoverT = 0;
+const canvas = renderer.domElement;
+canvas.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY]; controls.autoRotate = false; $('rotate').checked = false; });
+canvas.addEventListener('pointerup', (e) => {
+  if (!downAt) return;
+  const moved = Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]); downAt = null;
+  if (moved > 5) return;
+  const i = pick(e.clientX, e.clientY, e.pointerType === 'touch' ? 18 : 9);
+  select(i, false);
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'touch' || downAt) { tip.hidden = true; return; }
+  const now = performance.now(); if (now - hoverT < 70) return; hoverT = now;
+  const i = pick(e.clientX, e.clientY, 7);
+  if (i < 0) { tip.hidden = true; canvas.style.cursor = ''; return; }
+  tip.innerHTML = ''; tip.append(names[i]);
+  const s = document.createElement('small'); s.textContent = `profondeur ${depth[i]} · ${DOM[dom[i]].label}`; tip.append(s);
+  tip.style.left = Math.min(e.clientX, window.innerWidth - 340) + 'px'; tip.style.top = e.clientY + 'px'; tip.hidden = false;
+  canvas.style.cursor = 'pointer';
+});
+canvas.addEventListener('pointerleave', () => { tip.hidden = true; });
+
+// ---- search ----
+const q = $('q'), sugg = $('sugg');
+let results = [], cursor = -1;
+function runSearch() {
+  const s = q.value.trim();
+  if (s.length < 2) { sugg.hidden = true; return; }
+  const sl = s.toLowerCase();
+  const exact = [], pre = [], last = [], sub = [];
+  for (let i = 0; i < N; i++) {
+    const n = names[i]; if (n.startsWith('_inst_')) continue;
+    if (n === s) { exact.push(i); continue; }
+    const nl = n.toLowerCase();
+    if (nl.startsWith(sl)) { if (pre.length < 60) pre.push(i); continue; }
+    const dot = nl.lastIndexOf('.');
+    if (dot >= 0 && nl.startsWith(sl, dot + 1)) { if (last.length < 60) last.push(i); continue; }
+    if (sub.length < 40 && sl.length >= 4 && nl.includes(sl)) sub.push(i);
+  }
+  const byLen = (a, b) => names[a].length - names[b].length;
+  results = [...exact, ...pre.sort(byLen), ...last.sort(byLen), ...sub.sort(byLen)].slice(0, 14);
+  sugg.innerHTML = ''; cursor = -1;
+  if (!results.length) { sugg.innerHTML = '<li class="more" style="padding:8px 10px;color:var(--ink-3)">Aucun nom ne correspond.</li>'; sugg.hidden = false; return; }
+  results.forEach((j, k) => {
+    const l = document.createElement('li'); const b = document.createElement('button');
+    b.innerHTML = `<span class="sw" style="width:8px;height:8px;border-radius:50%;background:${domColor(j)};flex:none"></span><span class="nm"></span><span class="dp">p.${depth[j]}</span>`;
+    b.querySelector('.nm').textContent = names[j];
+    b.onclick = () => { select(j, true); sugg.hidden = true; q.value = names[j]; q.blur(); };
+    l.appendChild(b); sugg.appendChild(l);
+  });
+  sugg.hidden = false;
+}
+let st; q.addEventListener('input', () => { clearTimeout(st); st = setTimeout(runSearch, 120); });
+q.addEventListener('keydown', (e) => {
+  const bs = [...sugg.querySelectorAll('button')];
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault(); if (!bs.length) return;
+    cursor = (cursor + (e.key === 'ArrowDown' ? 1 : -1) + bs.length) % bs.length;
+    bs.forEach((b, k) => b.classList.toggle('on', k === cursor));
+  } else if (e.key === 'Enter') { (bs[Math.max(cursor, 0)] || {}).click?.(); }
+  else if (e.key === 'Escape') { sugg.hidden = true; }
+});
+document.addEventListener('click', (e) => { if (!$('search-wrap').contains(e.target)) sugg.hidden = true; });
+
+// ---- loop ----
+const clock = new THREE.Clock();
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const m = uniforms.uMix.value;
+  if (Math.abs(m - mixTarget) > 0.001) {
+    uniforms.uMix.value += (mixTarget - m) * Math.min(1, dt * 3.5);
+    if (sel >= 0) { const deps = []; for (let k = off[sel]; k < off[sel + 1]; k++) deps.push(dst[k]); const us = []; for (let k = roff[sel]; k < roff[sel + 1] && us.length < 1500; k++) us.push(rsrc[k]); buildLines(sel, deps, us); }
+  }
+  if (flyTo) {
+    flyTo.t = Math.min(1, flyTo.t + dt * 1.6);
+    const e = 1 - Math.pow(1 - flyTo.t, 3);
+    controls.target.lerp(flyTo.target, e * 0.25); camera.position.lerp(flyTo.cam, e * 0.25);
+    if (flyTo.t >= 1) flyTo = null;
+  }
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+// ---- source des données ----
+if (meta.exact && meta.exact.mathlib) {
+  const date = new Date(meta.commit_date + 'T12:00:00').toLocaleDateString('fr-CH', { day: 'numeric', month: 'long', year: 'numeric' });
+  $('src-note').innerHTML = `Lean 4 (Init), Batteries et Mathlib (commit <code>${meta.exact.mathlib}</code>, ${date}). `
+    + `Les profondeurs viennent du graphe exact des termes compilés (${fmt(meta.exact.constants)} constantes, y compris les instances et les lemmes utilisés par <code>simp</code> et les tactiques). `
+    + `Les fiches listent les théorèmes et définitions utilisés&nbsp;; les notions utilisées par plus de ${fmt(meta.hub || 2000)} déclarations (<code>Eq</code>, <code>Nat</code>…) n'y sont pas listées.`;
+}
+
+// ---- rafraîchissement : visible seulement quand la page est servie par serve.py ----
+(async () => {
+  let st0;
+  try {
+    const r = await fetch('api/status', { cache: 'no-store' });
+    if (!r.ok || !(r.headers.get('content-type') || '').includes('json')) return;
+    st0 = await r.json();
+  } catch { return; }
+  const box = $('refresh'), btn = $('r-btn'), step = $('r-step'), lg = $('r-log');
+  box.hidden = false;
+  $('r-when').textContent = `Atlas construit le ${(meta.exact && meta.exact.built) || '?'} · Mathlib ${(meta.exact && meta.exact.mathlib) || '?'}`;
+  function show(s) {
+    btn.disabled = s.running;
+    btn.textContent = s.running ? 'Rafraîchissement en cours…' : 'Rafraîchir depuis Mathlib';
+    box.classList.toggle('err', s.state === 'error');
+    if (s.state === 'idle') { step.hidden = lg.hidden = true; return; }
+    step.hidden = false;
+    const t = `${Math.floor(s.elapsed / 60)} min ${String(s.elapsed % 60).padStart(2, '0')} s`;
+    step.textContent = s.running ? `${s.step} · ${t}` : s.state === 'error' ? `Échec : ${s.step}` : `Terminé en ${t}.`;
+    lg.hidden = !s.log; lg.textContent = s.log; lg.scrollTop = lg.scrollHeight;
+  }
+  let timer;
+  async function poll() {
+    clearTimeout(timer);
+    const s = await fetch('api/status', { cache: 'no-store' }).then(r => r.json()).catch(() => null);
+    if (!s) { timer = setTimeout(poll, 5000); return; }
+    show(s);
+    if (s.running) timer = setTimeout(poll, 3000);
+    else if (s.state === 'done' && s.finished !== st0.finished) { step.textContent = 'Terminé. Rechargement de l\'atlas…'; setTimeout(() => location.reload(), 1500); }
+  }
+  btn.onclick = async () => {
+    if (!confirm("Mettre à jour Mathlib et recalculer tout l'atlas ?\n\n"
+      + "Compte en général 5 à 20 minutes : mise à jour de Mathlib, téléchargement de la version compilée, extraction du graphe, calcul. "
+      + "Si Mathlib est passé à une nouvelle version de Lean, le premier téléchargement est plus long.\n\n"
+      + "Tu peux laisser cette page ouverte : elle se rechargera toute seule à la fin.")) return;
+    const s = await fetch('api/refresh', { method: 'POST' }).then(r => r.json()).catch(() => null);
+    if (s) { show(s); poll(); }
+  };
+  show(st0);
+  if (st0.running) poll();
+})();
+
+$('loading').hidden = true;
+frame();
+})();
+</script>
+
+</body></html>
