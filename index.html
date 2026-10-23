@@ -98,7 +98,6 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 #path-toggle input { accent-color: var(--accent); }
 #c-ax { margin: 0 0 8px; color: var(--ink-2); font-size: 12.5px; line-height: 1.45; }
 #c-ax b { font-weight: 500; color: var(--ink); }
-#c-chain { max-height: 260px; overflow-y: auto; }
 .list li button { width: 100%; display: grid; grid-template-columns: 8px 1fr auto; gap: 8px; align-items: center; background: none; border: 0; padding: 4px 4px; border-radius: 5px; text-align: left; }
 .list li button:hover { background: rgba(255,255,255,0.06); }
 .list .nm { font-family: var(--f-code); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -196,11 +195,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   </div>
   <a id="c-link" target="_blank" rel="noopener">Voir la preuve sur GitHub ↗</a>
   <label class="check" id="path-toggle" hidden><input id="c-path" type="checkbox"> Montrer le chemin jusqu'aux axiomes</label>
-  <div class="list" id="c-path-info" hidden>
-    <p id="c-ax"></p>
-    <h3><span class="k" style="color:#fff4dc">Chaîne la plus longue</span><span id="c-nch"></span></h3>
-    <ul id="c-chain"></ul>
-  </div>
+  <p id="c-ax" hidden></p>
   <div class="list"><h3><span class="k" style="color:var(--dep)">Utilise</span><span id="c-nd"></span></h3><ul id="c-deps"></ul></div>
   <div class="list"><h3><span class="k" style="color:var(--use)">Utilisé par</span><span id="c-nu"></span></h3><ul id="c-uses"></ul></div>
 </aside>
@@ -363,7 +358,6 @@ const mat = new THREE.ShaderMaterial({
       if (st > 3.5 && st < 4.5) { vCol = mix(color, uUse, 0.55); vA = 0.9; size = 2.4; }
       if (st > 2.5 && st < 3.5) { vCol = vec3(1.0); vA = 1.0; size = 9.0; }
       if (st > 4.5 && st < 5.5) { vCol = vec3(1.0, 0.93, 0.75); vA = 1.0; size = 7.0; hidden = 0.0; }
-      if (st > 5.5) { vCol = vec3(1.0, 0.97, 0.88); vA = 1.0; size = 5.5; hidden = 0.0; }
       if (hidden > 0.5) { vA = 0.0; size = 0.0; }
       gl_PointSize = size * uPx * clamp(420.0 / -mv.z, 0.6, 3.2);
     }`,
@@ -382,11 +376,6 @@ scene.add(points);
 const lineGeo = new THREE.BufferGeometry();
 const lineMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
 const lines = new THREE.LineSegments(lineGeo, lineMat); scene.add(lines);
-// chaîne la plus longue : dessinée par-dessus, opaque, pour rester lisible au milieu du cône
-const chainGeo = new THREE.BufferGeometry();
-const chainLines = new THREE.LineSegments(chainGeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false }));
-chainLines.renderOrder = 2; scene.add(chainLines);
-
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
@@ -453,7 +442,7 @@ PICKS.forEach(([label, nm]) => {
 let sel = -1;
 const domColor = (i) => DOM[dom[i]].color;
 function clearState() { for (let i = 0; i < N; i++) info[i * 3 + 2] = AX.has(i) ? 5 : 0; }
-function cone(i) {   // all transitive dependencies (links listed + longest chain)
+function cone(i) {   // all transitive dependencies (links listed + deepest dependency of each)
   const seen = new Uint8Array(N); const stack = [i]; seen[i] = 1; let n = 0;
   while (stack.length) {
     const v = stack.pop();
@@ -461,12 +450,6 @@ function cone(i) {   // all transitive dependencies (links listed + longest chai
     if (pred) { const w = pred[v]; if (w !== NOPRED && !seen[w]) { seen[w] = 1; n++; stack.push(w); } }
   }
   return [seen, n];
-}
-function chainOf(i) {
-  const ch = [i];
-  if (!pred) return ch;
-  for (let v = pred[i]; v !== NOPRED && ch.length < 2000; v = pred[v]) ch.push(v);
-  return ch;
 }
 function li(j, ul) {
   const l = document.createElement('li'); const b = document.createElement('button');
@@ -497,37 +480,33 @@ function select(i, fly) {
   const deps = []; for (let k = off[i]; k < off[i + 1]; k++) deps.push(dst[k]);
   const axList = meta.axioms.map(a => names[a]);
   if (pathOn && pred) {
-    // tout le cône : chaque lien entre déclarations en amont, la chaîne la plus longue, et les liens vers les axiomes
-    const chain = chainOf(i);
+    // tout le cône : chaque lien entre déclarations en amont, et les liens vers les axiomes, tous de la même intensité
     const pairs = [], kinds = [];
     const MAXL = 400000;
     for (let v = 0; v < N && pairs.length < 2 * MAXL; v++) {
       if (!seen[v]) continue;
-      for (let k = off[v]; k < off[v + 1]; k++) { pairs.push(v, dst[k]); kinds.push(2); }
-      if (axUse) for (let t = 0; t < meta.axioms.length; t++) if (axUse[v] & (16 << t)) { pairs.push(v, meta.axioms[t]); kinds.push(4); }
+      let hasPred = pred[v] === NOPRED;
+      for (let k = off[v]; k < off[v + 1]; k++) { pairs.push(v, dst[k]); kinds.push(2); if (dst[k] === pred[v]) hasPred = true; }
+      if (!hasPred) { pairs.push(v, pred[v]); kinds.push(2); }
+      if (axUse) for (let t = 0; t < meta.axioms.length; t++) if (axUse[v] & (16 << t)) { pairs.push(v, meta.axioms[t]); kinds.push(2); }
     }
-    for (let k = 0; k + 1 < chain.length; k++) { pairs.push(chain[k], chain[k + 1]); kinds.push(3); }
-    for (const v of chain) info[v * 3 + 2] = 6;
     meta.axioms.forEach((a, t) => { info[a * 3 + 2] = axUse && !(axUse[i] & (1 << t)) ? 0 : 5; });
     info[i * 3 + 2] = 3; infoAttr.needsUpdate = true;
     setLines(pairs, kinds);
-    // fiche : axiomes et chaîne
     const used = axList.filter((_, t) => axUse && axUse[i] & (1 << t));
     const other = axUse && axUse[i] & 8;
-    $('c-ax').innerHTML = !axUse ? '' : used.length
-      ? `Axiomes utilisés : ${used.map(a => `<b>${a}</b>`).join(', ')}${other ? ' et un autre axiome de Lean (ex. <code>Lean.ofReduceBool</code>, via <code>native_decide</code>)' : ''}. En doré : tout ce qui est utilisé en amont (${fmt(nCone)} déclarations), jusqu'aux axiomes au centre.`
-      : `Aucun axiome${other ? ' standard (mais un autre axiome de Lean, ex. <code>Lean.ofReduceBool</code>)' : ''} : ce résultat ne dépend ni de ${axList.join(', ni de ')}. En doré : tout ce qui est utilisé en amont (${fmt(nCone)} déclarations).`;
-    const cl = $('c-chain'); cl.innerHTML = '';
-    chain.forEach(j => li(j, cl));
-    $('c-nch').textContent = `${fmt(chain.length - 1)} étapes`;
-    $('c-path-info').hidden = false;
+    $('c-ax').innerHTML = !axUse ? '' : (used.length
+      ? `Axiomes utilisés : ${used.map(a => `<b>${a}</b>`).join(', ')}${other ? ' et un autre axiome de Lean (ex. <code>Lean.ofReduceBool</code>, via <code>native_decide</code>)' : ''}.`
+      : `Aucun axiome${other ? ' standard (mais un autre axiome de Lean, ex. <code>Lean.ofReduceBool</code>)' : ''} : ce résultat ne dépend ni de ${axList.join(', ni de ')}.`)
+      + ` En doré : les ${fmt(nCone)} déclarations utilisées en amont et tous leurs liens, jusqu'aux axiomes au centre.`;
+    $('c-ax').hidden = false;
   } else {
     // lines: direct deps (gold) and up to 1500 direct users (blue)
     const pairs = [], kinds = [];
     deps.forEach(j => { pairs.push(i, j); kinds.push(0); });
     users.slice(0, 1500).forEach(j => { pairs.push(i, j); kinds.push(1); });
     setLines(pairs, kinds);
-    $('c-path-info').hidden = true;
+    $('c-ax').hidden = true;
   }
 
   // card
@@ -550,7 +529,9 @@ function select(i, fly) {
   users.sort((a, b) => depth[b] - depth[a]);
   users.slice(0, 40).forEach(j => li(j, ul));
   if (!nUsers) ul.innerHTML = '<li class="more">Personne pour l\'instant : c\'est un sommet.</li>';
-  else if (!users.length) ul.innerHTML = `<li class="more">Notion omniprésente : utilisée par ${fmt(nUsers)} déclarations, trop pour les lister.</li>`;
+  else if (!users.length) ul.innerHTML = nUsers > (meta.hub || 2000)
+    ? `<li class="more">Notion omniprésente : utilisée par ${fmt(nUsers)} déclarations, trop pour les lister.</li>`
+    : `<li class="more">Utilisée par ${fmt(nUsers)} déclarations. Les liens vers les ${KIND_FR[kn] === 'instance' ? 'instances' : 'déclarations de ce type'} ne sont pas listés.</li>`;
   else if (nUsers > 40) ul.insertAdjacentHTML('beforeend', `<li class="more">+ ${fmt(nUsers - Math.min(40, users.length))} autres</li>`);
   $('c-nd').textContent = fmt(deps.length); $('c-nu').textContent = fmt(nUsers);
   $('card').hidden = false;
@@ -561,24 +542,20 @@ function select(i, fly) {
     flyTo = { target: p.clone().multiplyScalar(0.35), cam: p.clone().add(dir.normalize().multiplyScalar(Math.max(260, Math.min(camDist, 700)))), t: 0 };
   }
 }
-// lignes : paires (a, b) + type → 0 dépendance directe, 1 utilisateur, 2 cône, 3 chaîne la plus longue, 4 vers un axiome
-let linePairs = new Uint32Array(0), lineKinds = new Uint8Array(0), chainPairs = new Uint32Array(0);
-const LCOL = [[0xf2d58a, 1, 0.35], [0x7fd3ff, 1, 0.35], [0xf2d58a, 0.16, 0.07], [0xfff4dc, 1.6, 1.2], [0xf2d58a, 0.4, 0.15]]
+// lignes : paires (a, b) + type → 0 dépendance directe, 1 utilisateur, 2 cône (chemin jusqu'aux axiomes)
+let linePairs = new Uint32Array(0), lineKinds = new Uint8Array(0);
+const LCOL = [[0xf2d58a, 1, 0.35], [0x7fd3ff, 1, 0.35], [0xf2d58a, 1, 1]]
   .map(([h, a, b]) => { const c = new THREE.Color(h); return [c.r * a, c.g * a, c.b * a, c.r * b, c.g * b, c.b * b]; });
 function setLines(pairs, kinds) {
   linePairs = Uint32Array.from(pairs); lineKinds = Uint8Array.from(kinds);
   const n = lineKinds.length, col = new Float32Array(n * 6);
-  // plus le cône est grand, plus ses liens sont discrets, pour que la chaîne reste lisible
-  const cnt = [0, 0, 0, 0, 0]; for (let k = 0; k < n; k++) cnt[lineKinds[k]]++;
-  const scale = (t, ref) => LCOL[t].map(x => x * Math.min(1, Math.sqrt(ref / Math.max(cnt[t], 1))));
-  const cols = [LCOL[0], LCOL[1], scale(2, 1500), LCOL[3], scale(4, 150)];
-  for (let k = 0; k < n; k++) col.set(cols[lineKinds[k]], k * 6);
+  for (let k = 0; k < n; k++) col.set(LCOL[lineKinds[k]], k * 6);
+  // en mode chemin, les arêtes se superposent au lieu de s'additionner : toutes gardent la même intensité
+  const path = n > 0 && lineKinds[0] === 2;
+  lineMat.blending = path ? THREE.NormalBlending : THREE.AdditiveBlending;
+  lineMat.opacity = path ? 0.15 : 0.55; lineMat.needsUpdate = true;
   lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 6), 3));
   lineGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const cp = [];
-  for (let k = 0; k < n; k++) if (lineKinds[k] === 3) cp.push(linePairs[2 * k], linePairs[2 * k + 1]);
-  chainPairs = Uint32Array.from(cp);
-  chainGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(cp.length * 3), 3));
   rebuildLines();
 }
 function rebuildLines() {
@@ -589,15 +566,6 @@ function rebuildLines() {
     arr[o] = posS[i] * a + posL[i] * m; arr[o + 1] = posS[i + 1] * a + posL[i + 1] * m; arr[o + 2] = posS[i + 2] * a + posL[i + 2] * m;
   }
   pos.needsUpdate = true; lineGeo.computeBoundingSphere();
-  const cpos = chainGeo.getAttribute('position');
-  if (cpos) {
-    const ca = cpos.array;
-    for (let k = 0; k < chainPairs.length; k++) {
-      const i = chainPairs[k] * 3, o = k * 3;
-      ca[o] = posS[i] * a + posL[i] * m; ca[o + 1] = posS[i + 1] * a + posL[i + 1] * m; ca[o + 2] = posS[i + 2] * a + posL[i + 2] * m;
-    }
-    cpos.needsUpdate = true; chainGeo.computeBoundingSphere();
-  }
 }
 let pathOn = false;
 if (pred) $('path-toggle').hidden = false;
