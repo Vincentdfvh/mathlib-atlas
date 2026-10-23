@@ -94,6 +94,11 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .list h3 .k { display: inline-flex; align-items: center; gap: 6px; }
 .list h3 .k::before { content: ""; width: 14px; height: 2px; background: currentColor; }
 .list ul { list-style: none; margin: 0; padding: 0; }
+#path-toggle { padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,0.04); color: var(--ink); }
+#path-toggle input { accent-color: var(--accent); }
+#c-ax { margin: 0 0 8px; color: var(--ink-2); font-size: 12.5px; line-height: 1.45; }
+#c-ax b { font-weight: 500; color: var(--ink); }
+#c-chain { max-height: 260px; overflow-y: auto; }
 .list li button { width: 100%; display: grid; grid-template-columns: 8px 1fr auto; gap: 8px; align-items: center; background: none; border: 0; padding: 4px 4px; border-radius: 5px; text-align: left; }
 .list li button:hover { background: rgba(255,255,255,0.06); }
 .list .nm { font-family: var(--f-code); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -190,6 +195,12 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
     <div><b id="c-users"></b><span>l'utilisent</span></div>
   </div>
   <a id="c-link" target="_blank" rel="noopener">Voir la preuve sur GitHub ↗</a>
+  <label class="check" id="path-toggle" hidden><input id="c-path" type="checkbox"> Montrer le chemin jusqu'aux axiomes</label>
+  <div class="list" id="c-path-info" hidden>
+    <p id="c-ax"></p>
+    <h3><span class="k" style="color:#fff4dc">Chaîne la plus longue</span><span id="c-nch"></span></h3>
+    <ul id="c-chain"></ul>
+  </div>
   <div class="list"><h3><span class="k" style="color:var(--dep)">Utilise</span><span id="c-nd"></span></h3><ul id="c-deps"></ul></div>
   <div class="list"><h3><span class="k" style="color:var(--use)">Utilisé par</span><span id="c-nu"></span></h3><ul id="c-uses"></ul></div>
 </aside>
@@ -223,12 +234,13 @@ async function getBin(path) {
   return buf;
 }
 
-let meta, nodesB, namesB, degB, edgesB, depthB, usersB;
+let meta, nodesB, namesB, degB, edgesB, depthB, usersB, predB, axB;
 try {
-  [meta, nodesB, namesB, degB, edgesB, depthB, usersB] = await Promise.all([
+  [meta, nodesB, namesB, degB, edgesB, depthB, usersB, predB, axB] = await Promise.all([
     fetch('data/meta.json').then(r => r.json()),
     getBin('data/nodes.b64.txt'), getBin('data/names.b64.txt'), getBin('data/deg.b64.txt'), getBin('data/edges.b64.txt'), getBin('data/depth.b64.txt'),
-    getBin('data/users.b64.txt').catch(() => null)]);
+    getBin('data/users.b64.txt').catch(() => null),
+    getBin('data/pred.b64.txt').catch(() => null), getBin('data/ax.b64.txt').catch(() => null)]);
 } catch (e) {
   loadMsg('Impossible de charger les données (' + e.message + '). Rechargez la page.');
   return;
@@ -268,6 +280,10 @@ for (let i = 0; i < N; i++) if (!nameIdx.has(names[i])) nameIdx.set(names[i], i)
 const AX = new Set(meta.axioms);
 const THM = new Set([meta.kinds.indexOf('theorem'), meta.kinds.indexOf('lemma')]);
 const usersN = usersB ? new Uint32Array(usersB.buffer.slice(usersB.byteOffset, usersB.byteOffset + 4 * N)) : null;
+// chaîne la plus longue (dépendance la plus profonde de chaque déclaration) et axiomes utilisés
+const NOPRED = 0xFFFFFFFF;
+const pred = predB ? new Uint32Array(predB.buffer.slice(predB.byteOffset, predB.byteOffset + 4 * N)) : null;
+const axUse = axB ? axB.subarray(0, N) : null;   // bits 0-2 : axiomes utilisés, bit 3 : autre axiome, bits 4-6 : utilisés directement
 const nUsersOf = (i) => usersN ? usersN[i] : roff[i + 1] - roff[i];
 const KIND_FR = { theorem: 'théorème', lemma: 'lemme', def: 'définition', abbrev: 'abréviation', instance: 'instance', structure: 'structure', class: 'classe', inductive: 'type inductif', axiom: 'axiome', opaque: 'constante opaque', irreducible_def: 'définition', alias: 'alias', field: 'champ de structure' };
 
@@ -346,7 +362,8 @@ const mat = new THREE.ShaderMaterial({
       if (st > 1.5 && st < 2.5) { vCol = mix(color, uDep, 0.55); vA = 0.95; size = 2.4; }
       if (st > 3.5 && st < 4.5) { vCol = mix(color, uUse, 0.55); vA = 0.9; size = 2.4; }
       if (st > 2.5 && st < 3.5) { vCol = vec3(1.0); vA = 1.0; size = 9.0; }
-      if (st > 4.5) { vCol = vec3(1.0, 0.93, 0.75); vA = 1.0; size = 7.0; hidden = 0.0; }
+      if (st > 4.5 && st < 5.5) { vCol = vec3(1.0, 0.93, 0.75); vA = 1.0; size = 7.0; hidden = 0.0; }
+      if (st > 5.5) { vCol = vec3(1.0, 0.97, 0.88); vA = 1.0; size = 5.5; hidden = 0.0; }
       if (hidden > 0.5) { vA = 0.0; size = 0.0; }
       gl_PointSize = size * uPx * clamp(420.0 / -mv.z, 0.6, 3.2);
     }`,
@@ -365,6 +382,10 @@ scene.add(points);
 const lineGeo = new THREE.BufferGeometry();
 const lineMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
 const lines = new THREE.LineSegments(lineGeo, lineMat); scene.add(lines);
+// chaîne la plus longue : dessinée par-dessus, opaque, pour rester lisible au milieu du cône
+const chainGeo = new THREE.BufferGeometry();
+const chainLines = new THREE.LineSegments(chainGeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false }));
+chainLines.renderOrder = 2; scene.add(chainLines);
 
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
@@ -432,13 +453,20 @@ PICKS.forEach(([label, nm]) => {
 let sel = -1;
 const domColor = (i) => DOM[dom[i]].color;
 function clearState() { for (let i = 0; i < N; i++) info[i * 3 + 2] = AX.has(i) ? 5 : 0; }
-function cone(i) {   // all transitive dependencies
+function cone(i) {   // all transitive dependencies (links listed + longest chain)
   const seen = new Uint8Array(N); const stack = [i]; seen[i] = 1; let n = 0;
   while (stack.length) {
     const v = stack.pop();
     for (let k = off[v]; k < off[v + 1]; k++) { const w = dst[k]; if (!seen[w]) { seen[w] = 1; n++; stack.push(w); } }
+    if (pred) { const w = pred[v]; if (w !== NOPRED && !seen[w]) { seen[w] = 1; n++; stack.push(w); } }
   }
   return [seen, n];
+}
+function chainOf(i) {
+  const ch = [i];
+  if (!pred) return ch;
+  for (let v = pred[i]; v !== NOPRED && ch.length < 2000; v = pred[v]) ch.push(v);
+  return ch;
 }
 function li(j, ul) {
   const l = document.createElement('li'); const b = document.createElement('button');
@@ -456,7 +484,7 @@ function select(i, fly) {
   sel = i; clearState();
   if (i < 0) {
     uniforms.uSel.value = 0; infoAttr.needsUpdate = true; $('card').hidden = true;
-    lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3)); return;
+    setLines([], []); return;
   }
   const [seen, nCone] = cone(i);
   for (let v = 0; v < N; v++) if (seen[v]) info[v * 3 + 2] = 2;
@@ -466,9 +494,41 @@ function select(i, fly) {
   info[i * 3 + 2] = 3;
   uniforms.uSel.value = 1; infoAttr.needsUpdate = true;
 
-  // lines: direct deps (gold) and up to 1500 direct users (blue)
   const deps = []; for (let k = off[i]; k < off[i + 1]; k++) deps.push(dst[k]);
-  buildLines(i, deps, users.slice(0, 1500));
+  const axList = meta.axioms.map(a => names[a]);
+  if (pathOn && pred) {
+    // tout le cône : chaque lien entre déclarations en amont, la chaîne la plus longue, et les liens vers les axiomes
+    const chain = chainOf(i);
+    const pairs = [], kinds = [];
+    const MAXL = 400000;
+    for (let v = 0; v < N && pairs.length < 2 * MAXL; v++) {
+      if (!seen[v]) continue;
+      for (let k = off[v]; k < off[v + 1]; k++) { pairs.push(v, dst[k]); kinds.push(2); }
+      if (axUse) for (let t = 0; t < meta.axioms.length; t++) if (axUse[v] & (16 << t)) { pairs.push(v, meta.axioms[t]); kinds.push(4); }
+    }
+    for (let k = 0; k + 1 < chain.length; k++) { pairs.push(chain[k], chain[k + 1]); kinds.push(3); }
+    for (const v of chain) info[v * 3 + 2] = 6;
+    meta.axioms.forEach((a, t) => { info[a * 3 + 2] = axUse && !(axUse[i] & (1 << t)) ? 0 : 5; });
+    info[i * 3 + 2] = 3; infoAttr.needsUpdate = true;
+    setLines(pairs, kinds);
+    // fiche : axiomes et chaîne
+    const used = axList.filter((_, t) => axUse && axUse[i] & (1 << t));
+    const other = axUse && axUse[i] & 8;
+    $('c-ax').innerHTML = !axUse ? '' : used.length
+      ? `Axiomes utilisés : ${used.map(a => `<b>${a}</b>`).join(', ')}${other ? ' et un autre axiome de Lean (ex. <code>Lean.ofReduceBool</code>, via <code>native_decide</code>)' : ''}. En doré : tout ce qui est utilisé en amont (${fmt(nCone)} déclarations), jusqu'aux axiomes au centre.`
+      : `Aucun axiome${other ? ' standard (mais un autre axiome de Lean, ex. <code>Lean.ofReduceBool</code>)' : ''} : ce résultat ne dépend ni de ${axList.join(', ni de ')}. En doré : tout ce qui est utilisé en amont (${fmt(nCone)} déclarations).`;
+    const cl = $('c-chain'); cl.innerHTML = '';
+    chain.forEach(j => li(j, cl));
+    $('c-nch').textContent = `${fmt(chain.length - 1)} étapes`;
+    $('c-path-info').hidden = false;
+  } else {
+    // lines: direct deps (gold) and up to 1500 direct users (blue)
+    const pairs = [], kinds = [];
+    deps.forEach(j => { pairs.push(i, j); kinds.push(0); });
+    users.slice(0, 1500).forEach(j => { pairs.push(i, j); kinds.push(1); });
+    setLines(pairs, kinds);
+    $('c-path-info').hidden = true;
+  }
 
   // card
   const f = meta.files[fileI[i]];
@@ -501,21 +561,47 @@ function select(i, fly) {
     flyTo = { target: p.clone().multiplyScalar(0.35), cam: p.clone().add(dir.normalize().multiplyScalar(Math.max(260, Math.min(camDist, 700)))), t: 0 };
   }
 }
-function buildLines(i, deps, users) {
-  const n = deps.length + users.length;
-  const pos = new Float32Array(n * 6), col = new Float32Array(n * 6);
-  const P = new THREE.Vector3(), Q = new THREE.Vector3();
-  curPos(i, P);
-  const cd = uniforms.uDep.value, cu = uniforms.uUse.value;
-  [...deps.map(j => [j, cd]), ...users.map(j => [j, cu])].forEach(([j, c], k) => {
-    curPos(j, Q);
-    pos.set([P.x, P.y, P.z, Q.x, Q.y, Q.z], k * 6);
-    col.set([c.r, c.g, c.b, c.r * 0.35, c.g * 0.35, c.b * 0.35], k * 6);
-  });
-  lineGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+// lignes : paires (a, b) + type → 0 dépendance directe, 1 utilisateur, 2 cône, 3 chaîne la plus longue, 4 vers un axiome
+let linePairs = new Uint32Array(0), lineKinds = new Uint8Array(0), chainPairs = new Uint32Array(0);
+const LCOL = [[0xf2d58a, 1, 0.35], [0x7fd3ff, 1, 0.35], [0xf2d58a, 0.16, 0.07], [0xfff4dc, 1.6, 1.2], [0xf2d58a, 0.4, 0.15]]
+  .map(([h, a, b]) => { const c = new THREE.Color(h); return [c.r * a, c.g * a, c.b * a, c.r * b, c.g * b, c.b * b]; });
+function setLines(pairs, kinds) {
+  linePairs = Uint32Array.from(pairs); lineKinds = Uint8Array.from(kinds);
+  const n = lineKinds.length, col = new Float32Array(n * 6);
+  // plus le cône est grand, plus ses liens sont discrets, pour que la chaîne reste lisible
+  const cnt = [0, 0, 0, 0, 0]; for (let k = 0; k < n; k++) cnt[lineKinds[k]]++;
+  const scale = (t, ref) => LCOL[t].map(x => x * Math.min(1, Math.sqrt(ref / Math.max(cnt[t], 1))));
+  const cols = [LCOL[0], LCOL[1], scale(2, 1500), LCOL[3], scale(4, 150)];
+  for (let k = 0; k < n; k++) col.set(cols[lineKinds[k]], k * 6);
+  lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 6), 3));
   lineGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  lineGeo.computeBoundingSphere();
+  const cp = [];
+  for (let k = 0; k < n; k++) if (lineKinds[k] === 3) cp.push(linePairs[2 * k], linePairs[2 * k + 1]);
+  chainPairs = Uint32Array.from(cp);
+  chainGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(cp.length * 3), 3));
+  rebuildLines();
 }
+function rebuildLines() {
+  const pos = lineGeo.getAttribute('position'); if (!pos) return;
+  const arr = pos.array, m = uniforms.uMix.value, a = 1 - m, n = lineKinds.length;
+  for (let k = 0; k < 2 * n; k++) {
+    const i = linePairs[k] * 3, o = k * 3;
+    arr[o] = posS[i] * a + posL[i] * m; arr[o + 1] = posS[i + 1] * a + posL[i + 1] * m; arr[o + 2] = posS[i + 2] * a + posL[i + 2] * m;
+  }
+  pos.needsUpdate = true; lineGeo.computeBoundingSphere();
+  const cpos = chainGeo.getAttribute('position');
+  if (cpos) {
+    const ca = cpos.array;
+    for (let k = 0; k < chainPairs.length; k++) {
+      const i = chainPairs[k] * 3, o = k * 3;
+      ca[o] = posS[i] * a + posL[i] * m; ca[o + 1] = posS[i + 1] * a + posL[i + 1] * m; ca[o + 2] = posS[i + 2] * a + posL[i + 2] * m;
+    }
+    cpos.needsUpdate = true; chainGeo.computeBoundingSphere();
+  }
+}
+let pathOn = false;
+if (pred) $('path-toggle').hidden = false;
+$('c-path').onchange = (e) => { pathOn = e.target.checked; if (sel >= 0) select(sel, false); };
 $('close').onclick = () => select(-1);
 
 // ---- picking (screen-space nearest visible point) ----
@@ -620,7 +706,7 @@ function frame() {
   const m = uniforms.uMix.value;
   if (Math.abs(m - mixTarget) > 0.001) {
     uniforms.uMix.value += (mixTarget - m) * Math.min(1, dt * 3.5);
-    if (sel >= 0) { const deps = []; for (let k = off[sel]; k < off[sel + 1]; k++) deps.push(dst[k]); const us = []; for (let k = roff[sel]; k < roff[sel + 1] && us.length < 1500; k++) us.push(rsrc[k]); buildLines(sel, deps, us); }
+    if (sel >= 0) rebuildLines();
   }
   if (flyTo) {
     flyTo.t = Math.min(1, flyTo.t + dt * 1.6);
